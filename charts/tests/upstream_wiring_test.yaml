@@ -1,0 +1,118 @@
+suite: Upstream controller wiring
+templates:
+  - charts/gha-runner-scale-set-controller/templates/deployment.yaml
+  - charts/gha-runner-scale-set-controller/templates/serviceaccount.yaml
+  - charts/gha-runner-scale-set-controller/templates/manager_single_namespace_watch_role.yaml
+  - charts/gha-runner-scale-set-controller/templates/manager_single_namespace_watch_role_binding.yaml
+release:
+  name: gha-runners-controller
+  namespace: arc-systems
+tests:
+  - it: keeps the controller name image replicas and service account
+    template: charts/gha-runner-scale-set-controller/templates/deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: gha-runners-controller-gha-rs-controller
+      - equal:
+          path: metadata.namespace
+          value: arc-systems
+      - equal:
+          path: spec.replicas
+          value: 2
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/actions/gha-runner-scale-set-controller:0.14.2
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: gha-runners-controller-gha-rs-controller
+  - it: keeps resource requests and limits
+    template: charts/gha-runner-scale-set-controller/templates/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources
+          value:
+            limits: {cpu: 100m, memory: 256Mi}
+            requests: {cpu: 10m, memory: 128Mi}
+  - it: keeps leader election logging concurrency and disabled metrics
+    template: charts/gha-runner-scale-set-controller/templates/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value:
+            - --auto-scaling-runner-set-only
+            - --enable-leader-election
+            - --leader-election-id=gha-runners-controller-gha-rs-controller
+            - --log-level=info
+            - --log-format=json
+            - --runner-max-concurrent-reconciles=2
+            - --update-strategy=immediate
+            - --listener-metrics-addr=0
+            - --listener-metrics-endpoint=
+            - --metrics-addr=0
+  - it: keeps required anti affinity and the actual upstream grace period
+    template: charts/gha-runner-scale-set-controller/templates/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution
+          value:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: gha-rs-controller
+                  app.kubernetes.io/instance: gha-runners-controller
+              topologyKey: kubernetes.io/hostname
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 10
+  - it: keeps the upstream service account identity
+    template: charts/gha-runner-scale-set-controller/templates/serviceaccount.yaml
+    asserts:
+      - equal:
+          path: metadata.name
+          value: gha-runners-controller-gha-rs-controller
+      - equal:
+          path: metadata.namespace
+          value: arc-systems
+  - it: passes the environment namespace into the controller
+    template: charts/gha-runner-scale-set-controller/templates/deployment.yaml
+    values:
+      - ../ci/all-on-values.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --watch-single-namespace=fake-runners
+      - equal:
+          path: metadata.labels["actions.github.com/controller-watch-single-namespace"]
+          value: fake-runners
+  - it: creates watch permissions in the environment namespace
+    template: charts/gha-runner-scale-set-controller/templates/manager_single_namespace_watch_role.yaml
+    values:
+      - ../ci/all-on-values.yaml
+    asserts:
+      - isKind:
+          of: Role
+      - equal:
+          path: metadata.namespace
+          value: fake-runners
+  - it: binds watch permissions to the controller service account
+    template: charts/gha-runner-scale-set-controller/templates/manager_single_namespace_watch_role_binding.yaml
+    values:
+      - ../ci/all-on-values.yaml
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: fake-runners
+      - equal:
+          path: roleRef
+          value:
+            apiGroup: rbac.authorization.k8s.io
+            kind: Role
+            name: gha-runners-controller-gha-rs-controller-single-namespace-watch
+      - equal:
+          path: subjects
+          value:
+            - kind: ServiceAccount
+              name: gha-runners-controller-gha-rs-controller
+              namespace: arc-systems
