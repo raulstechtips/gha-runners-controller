@@ -1,0 +1,27 @@
+# Shared controller settings. The runner namespace belongs in apps/dev.
+gha-runner-scale-set-controller:
+  # Two replicas enable upstream leader election.
+  replicaCount: 2
+  image:
+    # Pin the live controller image independently of future chart upgrades.
+    tag: "0.14.2"
+  resources:
+    limits:
+      cpu: 100m
+      memory: 256Mi
+    requests:
+      cpu: 10m
+      memory: 128Mi
+  # Keep the replicas on different nodes, with the existing release selector.
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gha-rs-controller
+              app.kubernetes.io/instance: gha-runners-controller
+          topologyKey: kubernetes.io/hostname
+  flags:
+    logLevel: info
+    logFormat: json
+    # runnerMaxConcurrentReconciles stays at the upstream default of 2.

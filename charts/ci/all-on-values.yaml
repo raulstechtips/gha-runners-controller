@@ -1,0 +1,5 @@
+# No wrapper features need activation. Exercise namespace-scoped upstream RBAC.
+# Fake values only; the real namespace is in cluster-config/apps/dev.
+gha-runner-scale-set-controller:
+  flags:
+    watchSingleNamespace: fake-runners

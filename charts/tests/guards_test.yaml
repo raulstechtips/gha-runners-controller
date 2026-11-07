@@ -1,0 +1,13 @@
+suite: Wrapper schema guards
+templates:
+  - charts/gha-runner-scale-set-controller/templates/deployment.yaml
+tests:
+  - it: rejects unknown wrapper keys
+    set:
+      unknownWrapperKey: true
+    asserts:
+      - failedTemplate:
+          errorMessage: |
+            values don't meet the specifications of the schema(s) in the following chart(s):
+            gha-runners-controller:
+            - (root): Additional property unknownWrapperKey is not allowed

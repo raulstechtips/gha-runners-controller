@@ -1,0 +1,10 @@
+apiVersion: v2
+name: gha-runners-controller
+description: "Actions Runner Controller wrapper with shared controller defaults."
+type: application
+version: 1.0.0
+appVersion: "0.14.2"
+dependencies:
+  - name: gha-runner-scale-set-controller
+    version: 0.14.2
+    repository: oci://ghcr.io/actions/actions-runner-controller-charts
